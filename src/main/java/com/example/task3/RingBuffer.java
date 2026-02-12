@@ -1,14 +1,13 @@
 package com.example.task3;
 
 import java.util.NoSuchElementException;
-import java.util.concurrent.locks.ReentrantLock;
 
 public class RingBuffer<E> {
     private static final int DEFAULT_SIZE = 10;
     private int size;
     private int head;
     private int tail;
-    private final Object[] innerArray;
+    private final E[] innerArray;
 
     RingBuffer() {
         this(DEFAULT_SIZE);
@@ -18,7 +17,7 @@ public class RingBuffer<E> {
         this.head = 0;
         this.tail = 0;
         this.size = 0;
-        this.innerArray = new Object[size];
+        this.innerArray = (E[]) new Object[size];
     }
 
     public synchronized void add(E e) {
@@ -37,7 +36,7 @@ public class RingBuffer<E> {
         if (size == 0) {
             throw new NoSuchElementException();
         }
-        E element = (E) innerArray[head];
+        E element = innerArray[head];
         innerArray[head] = null;
         if (head != tail) {
             moveHead();
