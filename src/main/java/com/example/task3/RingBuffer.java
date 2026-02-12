@@ -14,6 +14,9 @@ public class RingBuffer<E> {
     }
 
     RingBuffer(int size) {
+        if (size <= 0) {
+            throw new IllegalArgumentException("Size must be positive");
+        }
         this.head = 0;
         this.tail = 0;
         this.size = 0;
