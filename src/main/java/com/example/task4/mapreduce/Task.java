@@ -5,7 +5,7 @@ import lombok.Getter;
 import java.util.List;
 
 @Getter
-class Task {
+public class Task {
     private final TaskType type;
 
     // для MAP

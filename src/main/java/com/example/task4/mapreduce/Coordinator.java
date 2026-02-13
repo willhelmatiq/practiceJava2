@@ -10,8 +10,16 @@ public class Coordinator {
     private final List<String> inputFiles;
     private final int reduceCount;
 
+    private final Map<Integer, Integer> mapRetryCount = new HashMap<>();
+    private final Map<Integer, Integer> reduceRetryCount = new HashMap<>();
+    private static final int MAX_RETRIES = 3;
+
     private final Map<Integer, TaskStatus> mapTasks = new HashMap<>();
     private final Map<Integer, TaskStatus> reduceTasks = new HashMap<>();
+
+    private final Map<Integer, Long> mapStartTime = new HashMap<>();
+    private final Map<Integer, Long> reduceStartTime = new HashMap<>();
+    private static final long TASK_TIMEOUT_MS = 3000;
 
     private Phase phase = Phase.MAP;
 
@@ -23,6 +31,8 @@ public class Coordinator {
     }
 
     public synchronized Task requestTask() {
+        checkMapTimeouts();
+        checkReduceTimeouts();
 
         switch (phase) {
             case MAP -> {
@@ -39,11 +49,47 @@ public class Coordinator {
         throw new IllegalStateException();
     }
 
-    public synchronized void reportDone(Task task) {
+    public synchronized void reportSuccess(Task task) {
         if (task.getType() == TaskType.MAP) {
-            mapTasks.put(task.getTaskId(), TaskStatus.COMPLETED);
+            int taskId = task.getTaskId();
+            mapTasks.put(taskId, TaskStatus.COMPLETED);
+            mapRetryCount.remove(taskId);
+            mapStartTime.remove(taskId);
+        }
+        else if (task.getType() == TaskType.REDUCE) {
+            int reduceId = task.getReduceId();
+            reduceTasks.put(reduceId, TaskStatus.COMPLETED);
+            reduceRetryCount.remove(reduceId);
+            reduceStartTime.remove(reduceId);
+        }
+    }
+
+    public synchronized void reportFailure(Task task) {
+        if (task.getType() == TaskType.MAP) {
+
+            int taskId = task.getTaskId();
+            int count = mapRetryCount.getOrDefault(taskId, 0);
+
+            if (count < MAX_RETRIES) {
+                mapRetryCount.put(taskId, count + 1);
+                mapTasks.put(taskId, TaskStatus.READY);
+            } else {
+                System.out.println("MAP task " + taskId + " exceeded retries");
+                phase = Phase.DONE;
+            }
+
         } else if (task.getType() == TaskType.REDUCE) {
-            reduceTasks.put(task.getReduceId(), TaskStatus.COMPLETED);
+
+            int reduceId = task.getReduceId();
+            int count = reduceRetryCount.getOrDefault(reduceId, 0);
+
+            if (count < MAX_RETRIES) {
+                reduceRetryCount.put(reduceId, count + 1);
+                reduceTasks.put(reduceId, TaskStatus.READY);
+            } else {
+                System.out.println("REDUCE task " + reduceId + " exceeded retries");
+                phase = Phase.DONE;
+            }
         }
     }
 
@@ -55,6 +101,7 @@ public class Coordinator {
 
                 int taskId = entry.getKey();
                 mapTasks.put(taskId, TaskStatus.IN_PROGRESS);
+                mapStartTime.put(taskId, System.currentTimeMillis());
 
                 return Task.mapTask(
                         taskId,
@@ -84,6 +131,7 @@ public class Coordinator {
 
                 int reduceId = entry.getKey();
                 reduceTasks.put(reduceId, TaskStatus.IN_PROGRESS);
+                reduceStartTime.put(reduceId, System.currentTimeMillis());
 
                 List<String> files = buildIntermediateFileList(reduceId);
 
@@ -121,5 +169,39 @@ public class Coordinator {
         }
 
         return files;
+    }
+
+    private void checkMapTimeouts() {
+        long now = System.currentTimeMillis();
+
+        for (Map.Entry<Integer, TaskStatus> entry : mapTasks.entrySet()) {
+            int taskId = entry.getKey();
+            if (entry.getValue() == TaskStatus.IN_PROGRESS) {
+                long startedAt = mapStartTime.getOrDefault(taskId, 0L);
+                if (now - startedAt > TASK_TIMEOUT_MS) {
+                    System.out.println("MAP task " + taskId + " timed out");
+
+                    mapTasks.put(taskId, TaskStatus.READY);
+                    mapStartTime.remove(taskId);
+                }
+            }
+        }
+    }
+
+    private void checkReduceTimeouts() {
+        long now = System.currentTimeMillis();
+
+        for (Map.Entry<Integer, TaskStatus> entry : reduceTasks.entrySet()) {
+            int reduceId = entry.getKey();
+            if (entry.getValue() == TaskStatus.IN_PROGRESS) {
+                long startedAt = reduceStartTime.getOrDefault(reduceId, 0L);
+                if (now - startedAt > TASK_TIMEOUT_MS) {
+                    System.out.println("REDUCE task " + reduceId + " timed out");
+
+                    reduceTasks.put(reduceId, TaskStatus.READY);
+                    reduceStartTime.remove(reduceId);
+                }
+            }
+        }
     }
 }

@@ -63,10 +63,11 @@ public class Worker implements Runnable {
                     keyValues
             );
 
-            coordinator.reportDone(task);
+            coordinator.reportSuccess(task);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Thread: " + Thread.currentThread().getName() + " FAILED MAP");
+            coordinator.reportFailure(task);
         }
     }
 
@@ -144,10 +145,11 @@ public class Worker implements Runnable {
 
             writeReduceOutput(task.getReduceId(), grouped);
 
-            coordinator.reportDone(task);
+            coordinator.reportSuccess(task);
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println("Thread: " + Thread.currentThread().getName() + " FAILED REDUCE");
+            coordinator.reportFailure(task);
         }
     }
 
@@ -165,7 +167,7 @@ public class Worker implements Runnable {
 
             for (String key : sortedKeys) {
 
-                String result = reduce(key, grouped.get(key));
+                String result = reduce(grouped.get(key));
 
                 writer.write(key + " " + result);
                 writer.newLine();
@@ -173,7 +175,7 @@ public class Worker implements Runnable {
         }
     }
 
-    private String reduce(String key, List<String> values) {
+    private String reduce(List<String> values) {
         return String.valueOf(values.size());
     }
 }
