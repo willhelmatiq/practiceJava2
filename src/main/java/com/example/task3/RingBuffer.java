@@ -24,12 +24,12 @@ public class RingBuffer<E> {
     }
 
     public synchronized void add(E e) {
+        if (size == innerArray.length) {
+            throw new IllegalStateException("Buffer is full");
+        }
+
         if (size != 0) {
             moveTail();
-            if (head == tail) {
-                moveHead();
-                size--;
-            }
         }
         innerArray[tail] = e;
         size++;
