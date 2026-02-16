@@ -1,49 +1,59 @@
 package com.example.task1;
 
 public class Threads {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         Object lock = new Object();
         int[] value = new int[1];
-        PrintingNubmerThread evenTread = new PrintingNubmerThread(value, true, lock);
-        PrintingNubmerThread oddTread = new PrintingNubmerThread(value, false, lock);
-        evenTread.start();
-        oddTread.start();
+        int limit = 100;
+        Thread evenThread = new PrintingNumberThread(value, true, lock, limit);
+        Thread oddThread = new PrintingNumberThread(value, false, lock, limit);
+
+        evenThread.start();
+        oddThread.start();
+
+        evenThread.join();
+        oddThread.join();
+
+        System.out.println("Finished");
     }
 
-    static class PrintingNubmerThread extends Thread {
-        private int[] value;
-        private boolean isEven;
-        private Object lock;
+    static class PrintingNumberThread extends Thread {
 
-        PrintingNubmerThread(int[] value, boolean isEven, Object lock) {
+        private final int[] value;
+        private final boolean isEven;
+        private final Object lock;
+        private final int limit;
+
+        PrintingNumberThread(int[] value, boolean isEven, Object lock, int limit) {
             this.value = value;
             this.isEven = isEven;
             this.lock = lock;
+            this.limit = limit;
         }
 
         @Override
         public void run() {
             while (true) {
                 synchronized (lock) {
-                    if (value[0] % 2 == 0 && this.isEven) {
-                        System.out.println(value[0] + " :" + Thread.currentThread().getName());
-                        value[0]++;
+
+                    if (value[0] > limit) {
+                        lock.notifyAll(); // будим другой поток
+                        return;
+                    }
+
+                    while ((value[0] % 2 == 0) != isEven) {
                         try {
-                            Thread.sleep(500);
+                            lock.wait();
                         } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
+                            Thread.currentThread().interrupt();
+                            return;
                         }
                     }
-                }
-                synchronized (lock) {
-                    if (value[0] % 2 == 1 && !this.isEven) {
-                        System.out.println(value[0] + " :" + Thread.currentThread().getName());
+
+                    if (value[0] <= limit) {
+                        System.out.println(value[0] + " : " + Thread.currentThread().getName());
                         value[0]++;
-                        try {
-                            Thread.sleep(500);
-                        } catch (InterruptedException e) {
-                            throw new RuntimeException(e);
-                        }
+                        lock.notifyAll();
                     }
                 }
             }
